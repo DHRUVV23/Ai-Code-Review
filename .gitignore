@@ -1,0 +1,18 @@
+# Secrets
+.env
+.env.local
+
+# Go
+/backend/bin/
+/worker/bin/
+vendor/
+
+# Node/Next.js
+node_modules/
+.next/
+/frontend/out/
+/frontend/build/
+
+# System
+.DS_Store
+Thumbs.db
