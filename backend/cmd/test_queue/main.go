@@ -6,11 +6,11 @@ import (
 )
 
 func main() {
-	// 1. Connect to Redis
+	
 	worker.InitClient()
 	defer worker.CloseClient()
 
-	// 2. Fake a PR Review Job
+
 	repoID := 1
 	prNumber := 99
 	repoName := "fake/repo"
@@ -21,11 +21,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// 3. Send it
+	
 	info, err := worker.Client.Enqueue(task)
 	if err != nil {
 		log.Fatal(err)
 	}
 	
-	log.Printf("✅ Success! Job ID: %s", info.ID)
+	log.Printf("Success! Job ID: %s", info.ID)
 }

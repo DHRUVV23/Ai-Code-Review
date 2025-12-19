@@ -10,7 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/go-resty/resty/v2" // You might need to go get this: github.com/go-resty/resty/v2
+	"github.com/go-resty/resty/v2" 
 	"github.com/DHRUVV23/ai-code-review/backend/internal/repository"
 )
 
@@ -18,7 +18,7 @@ type AuthHandler struct {
 	UserRepo *repository.UserRepository
 }
 
-// 1. Login: Redirects user to GitHub
+
 func (h *AuthHandler) GitHubLogin(c *gin.Context) {
 	clientID := os.Getenv("GITHUB_CLIENT_ID")
 	// We redirect to GitHub's authorization page
