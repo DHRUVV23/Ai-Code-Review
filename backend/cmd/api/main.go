@@ -43,6 +43,7 @@ func main() {
 		RepoRepository:   repoRepo,   // <--- ADDED
 		ConfigRepository: configRepo, // <--- ADDED
 	}
+	userHandler := &handler.UserHandler{UserRepo: userRepo}
 
 	
 
@@ -56,16 +57,22 @@ func main() {
 	// 6. Register Routes
 	// --- Webhooks ---
 	r.POST("/webhooks/github", handler.HandleWebhook)
-
-	// --- Authentication ---
 	r.GET("/auth/login", authHandler.GitHubLogin)
 	r.GET("/auth/callback", authHandler.GitHubCallback)
 
-	// --- Repositories & Config (API) ---
-	r.GET("/api/repos", repoHandler.ListRepositories)            // List all repos
-	r.GET("/api/repos/:id/config", repoHandler.GetConfig)        // Get config for a repo
-	r.POST("/api/repos/:id/config", repoHandler.UpdateConfig)    // Update config for a repo
+	// 2. Dashboard API (Week 3 Structure)
+	// We group them under "v1" so your URLs look like /api/v1/user/profile
+	v1 := r.Group("/api/v1")
+	{
+		// User Routes
+		v1.GET("/user/profile", userHandler.GetUserProfile)
+		v1.PUT("/user/profile", userHandler.UpdateUserProfile)
+		
+		// Repository Routes (Refactoring old routes to match new plan)
+		v1.GET("/user/repositories", repoHandler.ListRepositories) // Matches "GET /api/v1/user/repositories"
+		v1.GET("/repositories/:id", repoHandler.GetConfig)         // Matches "GET /api/v1/repositories/:id" (We reused config for now)
+		v1.PUT("/repositories/:id/config", repoHandler.UpdateConfig)
+	}
 
-	// 7. Start Server
 	r.Run(":8080")
 }

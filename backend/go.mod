@@ -4,12 +4,12 @@ go 1.25.5
 
 require (
 	github.com/gin-gonic/gin v1.11.0
-	github.com/go-resty/resty/v2 v2.17.1
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/go-github/v57 v57.0.0
 	github.com/hibiken/asynq v0.25.1
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/joho/godotenv v1.5.1
+	golang.org/x/oauth2 v0.34.0
 )
 
 require (
