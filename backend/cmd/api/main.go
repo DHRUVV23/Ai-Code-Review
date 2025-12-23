@@ -35,6 +35,7 @@ func main() {
 	userRepo := repository.NewUserRepository(database.Pool)
 	repoRepo := repository.NewRepoRepository(database.Pool)     // <--- ADDED
 	configRepo := repository.NewConfigRepository(database.Pool) // <--- ADDED
+	reviewRepo := repository.NewReviewRepository(database.Pool)
 
 	// 4. Initialize Handlers (The "Waiters")
 	// We inject the repositories into the handlers
@@ -44,6 +45,7 @@ func main() {
 		ConfigRepository: configRepo, // <--- ADDED
 	}
 	userHandler := &handler.UserHandler{UserRepo: userRepo}
+	reviewHandler := &handler.ReviewHandler{ReviewRepository: reviewRepo}
 
 	
 
@@ -72,6 +74,7 @@ func main() {
 		v1.GET("/user/repositories", repoHandler.ListRepositories) // Matches "GET /api/v1/user/repositories"
 		v1.GET("/repositories/:id", repoHandler.GetConfig)         // Matches "GET /api/v1/repositories/:id" (We reused config for now)
 		v1.PUT("/repositories/:id/config", repoHandler.UpdateConfig)
+		v1.GET("/repositories/:id/reviews", reviewHandler.ListReviews) 
 	}
 
 	r.Run(":8080")
