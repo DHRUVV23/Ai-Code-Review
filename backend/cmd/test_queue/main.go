@@ -12,8 +12,8 @@ func main() {
 
 
 	repoID := 1
-	prNumber := 99
-	repoName := "fake/repo"
+	prNumber := 1
+	repoName := "DHRUVV23/OmniScribe"
 
 	log.Println("🚀 Sending fake job to queue...")
 	task, err := worker.NewReviewPRTask(repoID, prNumber, repoName)

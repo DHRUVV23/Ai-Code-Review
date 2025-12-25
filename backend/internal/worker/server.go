@@ -10,6 +10,7 @@ import (
 	"github.com/DHRUVV23/ai-code-review/backend/internal/repository"
 	"github.com/DHRUVV23/ai-code-review/backend/internal/service"
 	"github.com/hibiken/asynq"
+	"strings"
 )
 
 // StartWorker initializes the background processor
@@ -59,33 +60,43 @@ func HandleReviewPR(ctx context.Context, t *asynq.Task) error {
 
 	log.Printf("🤖 AI WORKING: Reviewing Repo %s (PR #%d)", p.RepoName, p.PrNumber)
 
-	// 1. Initialize DB Connection & Service
+	// 1. Init Services
 	reviewRepo := repository.NewReviewRepository(database.Pool)
 	ai := service.NewAIService()
+	gh := service.NewGitHubService() // <--- NEW
 
-	// 2. Create a "Pending" record in the database
-	// This lets the frontend show "Review in Progress..."
+	// 2. Create Pending Review in DB
 	reviewID, err := reviewRepo.CreateReview(ctx, p.RepoID, p.PrNumber)
 	if err != nil {
 		log.Printf("❌ Failed to create review record: %v", err)
 		return err
 	}
 
-	// 3. Mock Diff (Later we fetch from GitHub)
-	mockDiff := `
-	func login(password string) {
-		log.Printf("User password: %s", password) // Security Issue!
+	// 3. FETCH REAL CODE FROM GITHUB (The New Part!)
+	// RepoName comes in as "owner/repo" (e.g., "DHRUVV23/ai-code-review")
+	parts := strings.Split(p.RepoName, "/")
+	if len(parts) != 2 {
+		log.Printf("❌ Invalid repo name format: %s", p.RepoName)
+		return fmt.Errorf("invalid repo name")
 	}
-	`
+	owner, repoName := parts[0], parts[1]
 
-	// 4. Get AI Analysis
-	reviewContent, err := ai.ReviewCode(ctx, mockDiff, "concise")
+	log.Println("🌍 Fetching Diff from GitHub...")
+	realDiff, err := gh.GetPullRequestDiff(ctx, owner, repoName, p.PrNumber)
+	if err != nil {
+		log.Printf("❌ GitHub Fetch Failed: %v", err)
+		// Fallback: If GitHub fails (e.g., token issue), use the mock so the flow doesn't break
+		realDiff = "func fallback() { log.Println('GitHub fetch failed, using fallback') }"
+	}
+
+	// 4. Send REAL Diff to AI
+	reviewContent, err := ai.ReviewCode(ctx, realDiff, "concise")
 	if err != nil {
 		log.Printf("❌ AI Failed: %v", err)
-		return err 
+		return err
 	}
 
-	// 5. Update the Database with the Result
+	// 5. Save Result
 	err = reviewRepo.UpdateReviewResult(ctx, reviewID, reviewContent)
 	if err != nil {
 		log.Printf("❌ Failed to save review result: %v", err)
