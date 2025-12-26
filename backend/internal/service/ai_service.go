@@ -37,34 +37,50 @@ func (s *AIService) ReviewCode(ctx context.Context, diff string, style string) (
 
 	// 1. Select the Model (Gemini 1.5 Flash is fast & free)
 	model := s.Client.GenerativeModel("gemini-flash-latest")
+	model.ResponseMIMEType = "application/json"
 
-	// 2. Construct the Prompt
+	// 3. PROMPT TEMPLATE
+	// FIX: Removed internal backticks to prevent syntax error
 	prompt := fmt.Sprintf(`
-	You are an expert Senior Software Engineer doing a code review.
-	Review Style: %s (Be strictly professional and concise).
+	You are a Senior Code Reviewer. 
+	Analyze the following Git Diff code changes.
 	
-	Analyze the following Git Diff. 
-	- Identify potential bugs, security flaws, or performance issues.
-	- Suggest cleaner or more idiomatic Go code if applicable.
-	- If the code looks good, just say "LGTM".
+	OBJECTIVE:
+	Identify bugs, security vulnerabilities, performance issues, and bad practices.
 	
-	Git Diff:
-	%s
-	`, style, diff)
+	STRICT OUTPUT FORMAT:
+	You must respond ONLY with a valid JSON array. Do not use markdown formatting.
+	Use this schema:
+	[
+		{
+			"file": "filename.ext",
+			"line": 10,
+			"type": "security|bug|performance|style",
+			"severity": "high|medium|low",
+			"message": "Concise explanation of the issue",
+			"suggestion": "Code or logic to fix it"
+		}
+	]
 
-	// 3. Send Request to AI
+	If the code is perfectly fine, return an empty array: []
+
+	CODE CONTEXT (DIFF):
+	%s
+	`, diff)
+
+	// 4. Send Request
 	resp, err := model.GenerateContent(ctx, genai.Text(prompt))
 	if err != nil {
-		return "", fmt.Errorf("AI generation failed: %w", err)
+		return "", err
 	}
 
-	// 4. Extract Response
+	// 5. Extract Response
 	if len(resp.Candidates) > 0 && len(resp.Candidates[0].Content.Parts) > 0 {
-		// The response comes back as "Parts", usually Text
-		if txt, ok := resp.Candidates[0].Content.Parts[0].(genai.Text); ok {
+		part := resp.Candidates[0].Content.Parts[0]
+		if txt, ok := part.(genai.Text); ok {
 			return string(txt), nil
 		}
 	}
 
-	return "⚠️ AI returned no content.", nil
+	return "[]", nil // Fallback
 }
