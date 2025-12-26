@@ -63,7 +63,8 @@ func HandleReviewPR(ctx context.Context, t *asynq.Task) error {
 	// 1. Init Services
 	reviewRepo := repository.NewReviewRepository(database.Pool)
 	ai := service.NewAIService()
-	gh := service.NewGitHubService() // <--- NEW
+	gh := service.NewGitHubService()
+	parser := service.NewDiffParser() // ✅ You already have this
 
 	// 2. Create Pending Review in DB
 	reviewID, err := reviewRepo.CreateReview(ctx, p.RepoID, p.PrNumber)
@@ -72,8 +73,7 @@ func HandleReviewPR(ctx context.Context, t *asynq.Task) error {
 		return err
 	}
 
-	// 3. FETCH REAL CODE FROM GITHUB (The New Part!)
-	// RepoName comes in as "owner/repo" (e.g., "DHRUVV23/ai-code-review")
+	// 3. FETCH REAL CODE FROM GITHUB
 	parts := strings.Split(p.RepoName, "/")
 	if len(parts) != 2 {
 		log.Printf("❌ Invalid repo name format: %s", p.RepoName)
@@ -85,12 +85,47 @@ func HandleReviewPR(ctx context.Context, t *asynq.Task) error {
 	realDiff, err := gh.GetPullRequestDiff(ctx, owner, repoName, p.PrNumber)
 	if err != nil {
 		log.Printf("❌ GitHub Fetch Failed: %v", err)
-		// Fallback: If GitHub fails (e.g., token issue), use the mock so the flow doesn't break
+		// Keep fallback for testing stability
 		realDiff = "func fallback() { log.Println('GitHub fetch failed, using fallback') }"
 	}
 
-	// 4. Send REAL Diff to AI
-	reviewContent, err := ai.ReviewCode(ctx, realDiff, "concise")
+	// ======================================================
+	// 👇 NEW SECTION: PARSE & FILTER THE DIFF 👇
+	// ======================================================
+	log.Println("🔍 Parsing and Filtering files...")
+	fileChanges := parser.Parse(realDiff)
+
+	var filteredDiffBuilder strings.Builder
+	validFilesCount := 0
+
+	for _, file := range fileChanges {
+		if !file.IsSafe {
+			log.Printf("⚠️ Skipping ignored file: %s", file.Path)
+			continue
+		}
+		
+		validFilesCount++
+		// Reconstruct the clean diff for the AI
+		filteredDiffBuilder.WriteString(fmt.Sprintf("--- FILE: %s (%s) ---\n", file.Path, file.Language))
+		filteredDiffBuilder.WriteString(file.Content)
+		filteredDiffBuilder.WriteString("\n\n")
+	}
+
+	finalDiff := filteredDiffBuilder.String()
+
+	if validFilesCount == 0 {
+		log.Println("❌ No relevant code files found to review.")
+		// Optional: You could save a "No code changes found" message to the DB here
+		return nil
+	}
+	
+	log.Printf("✨ Sending %d valid files to AI...", validFilesCount)
+	// ======================================================
+	// 👆 END OF NEW SECTION 👆
+	// ======================================================
+
+	// 4. Send CLEAN Diff to AI (Changed 'realDiff' to 'finalDiff')
+	reviewContent, err := ai.ReviewCode(ctx, finalDiff, "concise")
 	if err != nil {
 		log.Printf("❌ AI Failed: %v", err)
 		return err
