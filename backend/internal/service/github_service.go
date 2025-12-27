@@ -5,41 +5,52 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/google/go-github/v53/github"
+	"github.com/google/go-github/v50/github"
 	"golang.org/x/oauth2"
 )
 
 type GitHubService struct {
-	Client *github.Client
+	Client *github.Client // Exported field (Capital 'C')
 }
 
 func NewGitHubService() *GitHubService {
-	// 1. Get the Token from .env (for now, we use a personal token)
 	token := os.Getenv("GITHUB_TOKEN")
 	if token == "" {
-		fmt.Println("⚠️ Warning: GITHUB_TOKEN is missing. Private repos will fail.")
+		// Return client without auth if token is missing (for public repos)
 		return &GitHubService{Client: github.NewClient(nil)}
 	}
 
-	// 2. Authenticate
 	ctx := context.Background()
 	ts := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: token},
 	)
 	tc := oauth2.NewClient(ctx, ts)
-	client := github.NewClient(tc)
 
-	return &GitHubService{Client: client}
+	return &GitHubService{Client: github.NewClient(tc)}
 }
 
-// GetPullRequestDiff fetches the raw code changes from a PR
+// GetPullRequestDiff fetches the raw text of the changes
 func (s *GitHubService) GetPullRequestDiff(ctx context.Context, owner, repo string, prNumber int) (string, error) {
-	// 3. Request the "Diff" format from GitHub
-	// We want the raw diff string, not the JSON object
-	diff, _, err := s.Client.PullRequests.GetRaw(ctx, owner, repo, prNumber, github.RawOptions{Type: github.Diff})
+	opts := github.RawOptions{Type: github.Diff}
+	diff, _, err := s.Client.PullRequests.GetRaw(ctx, owner, repo, prNumber, opts)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch PR diff: %w", err)
 	}
-
 	return diff, nil
+}
+
+// PostComment posts a markdown comment to the PR
+func (s *GitHubService) PostComment(ctx context.Context, owner, repo string, prNumber int, commentBody string) error {
+	// Create the comment object
+	comment := &github.IssueComment{
+		Body: &commentBody,
+	}
+
+	// Use the library's built-in method (Fixes the "undefined" errors!)
+	_, _, err := s.Client.Issues.CreateComment(ctx, owner, repo, prNumber, comment)
+	if err != nil {
+		return fmt.Errorf("failed to post comment: %w", err)
+	}
+
+	return nil
 }
