@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import RepoReviews from "./pages/RepoReviews";
+import './index.css';
 
 function App() {
   return (
