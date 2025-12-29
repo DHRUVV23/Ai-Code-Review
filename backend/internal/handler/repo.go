@@ -4,9 +4,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"github.com/DHRUVV23/ai-code-review/backend/internal/model"
 	"github.com/DHRUVV23/ai-code-review/backend/internal/repository"
+	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type RepoHandler struct {
@@ -14,29 +15,51 @@ type RepoHandler struct {
 	ConfigRepository *repository.ConfigRepository
 }
 
-// --- 1. List Repositories (The Missing Function) ---
-func (h *RepoHandler) ListRepositories(c *gin.Context) {
-	// For now, hardcode ID 1. Later we get this from the JWT token.
-	repoID := 1
-	repo, err := h.RepoRepository.GetRepositoryByID(c.Request.Context(), repoID)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch repository"})
-		return
-	}
-
-	if repo == nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "No repository found"})
-		return
-	}
-
-	c.JSON(http.StatusOK, repo)
+type AddRepoRequest struct {
+	Name  string `json:"name" binding:"required"`
+	Owner string `json:"owner" binding:"required"`
 }
 
-// --- 2. Get Config ---
+// RegisterRepository handles POST /api/v1/repositories
+func (h *RepoHandler) RegisterRepository(c *gin.Context) {
+	userID := getUserIDFromToken(c)
+	if userID == 0 {
+		return
+	}
+
+	var req AddRepoRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	repo, err := h.RepoRepository.CreateRepository(c.Request.Context(), userID, req.Name, req.Owner)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create repository"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, repo)
+}
+
+// ListRepositories handles GET /api/v1/user/repositories
+func (h *RepoHandler) ListRepositories(c *gin.Context) {
+	userID := getUserIDFromToken(c)
+	if userID == 0 {
+		return
+	}
+
+	repos, err := h.RepoRepository.ListRepositories(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch repos"})
+		return
+	}
+	c.JSON(http.StatusOK, repos)
+}
+
+// GetConfig handles GET /repositories/:id
 func (h *RepoHandler) GetConfig(c *gin.Context) {
 	repoID, _ := strconv.Atoi(c.Param("id"))
-
 	config, err := h.ConfigRepository.GetByRepoID(c.Request.Context(), repoID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch config"})
@@ -45,10 +68,10 @@ func (h *RepoHandler) GetConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, config)
 }
 
-// --- 3. Update Config ---
+// UpdateConfig handles PUT /repositories/:id/config
 func (h *RepoHandler) UpdateConfig(c *gin.Context) {
 	repoID, _ := strconv.Atoi(c.Param("id"))
-
+	
 	var config model.Configuration
 	if err := c.ShouldBindJSON(&config); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
@@ -61,4 +84,21 @@ func (h *RepoHandler) UpdateConfig(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, config)
+}
+
+// Helper to extract UserID
+func getUserIDFromToken(c *gin.Context) int {
+	tokenString := c.GetHeader("Authorization")
+	if len(tokenString) > 7 {
+		tokenString = tokenString[7:] // Remove "Bearer "
+	}
+	
+	token, _, _ := new(jwt.Parser).ParseUnverified(tokenString, jwt.MapClaims{})
+	if claims, ok := token.Claims.(jwt.MapClaims); ok {
+		if idFloat, ok := claims["user_id"].(float64); ok {
+			return int(idFloat)
+		}
+	}
+	c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+	return 0
 }

@@ -3,64 +3,94 @@ package repository
 import (
 	"context"
 	"fmt"
+	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/DHRUVV23/ai-code-review/backend/internal/model"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type RepoRepository struct {
 	Pool *pgxpool.Pool
 }
 
-// NewRepoRepository creates a new instance
 func NewRepoRepository(pool *pgxpool.Pool) *RepoRepository {
 	return &RepoRepository{Pool: pool}
 }
 
-// Create (The 'C' in CRUD) - Saves a new repo to DB
-func (r *RepoRepository) CreateRepository(ctx context.Context, repo *model.Repository) error {
-	query := `
-		INSERT INTO repositories (github_repo_id, installation_id, name, full_name, private)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, created_at
-	`
-	err := r.Pool.QueryRow(ctx, query,
-		repo.GithubRepoID,
-		repo.InstallationID,
-		repo.Name,
-		repo.FullName,
-		repo.Private,
-	).Scan(&repo.ID, &repo.CreatedAt)
-
+// CreateRepository saves a new repo AND creates a default config
+func (r *RepoRepository) CreateRepository(ctx context.Context, userID int, name, owner string) (*model.Repository, error) {
+	tx, err := r.Pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to insert repository: %w", err)
+		return nil, err
 	}
-	return nil
+	defer tx.Rollback(ctx)
+
+	// 1. Insert Repository
+	var repoID int
+	var createdAt time.Time
+	
+	repoQuery := `
+		INSERT INTO repositories (user_id, name, owner)
+		VALUES ($1, $2, $3)
+		RETURNING id, created_at`
+	
+	err = tx.QueryRow(ctx, repoQuery, userID, name, owner).Scan(&repoID, &createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert repo: %w", err)
+	}
+
+	// 2. Create Default Configuration
+	// Note: We insert strict strings here because the DB column is TEXT
+	configQuery := `
+		INSERT INTO configurations (repository_id, review_style, ignore_patterns)
+		VALUES ($1, 'concise', '*.md,*.lock')`
+	
+	_, err = tx.Exec(ctx, configQuery, repoID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create default config: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return &model.Repository{
+		ID:        repoID,
+		UserID:    userID,
+		Name:      name,
+		Owner:     owner,
+		CreatedAt: createdAt,
+	}, nil
 }
 
-// GetByID (The 'R' in CRUD) - Fetches a repo by ID
-func (r *RepoRepository) GetRepositoryByID(ctx context.Context, id int) (*model.Repository, error) {
-	query := `SELECT id, github_repo_id, installation_id, name, full_name, private, created_at FROM repositories WHERE id = $1`
-	
-	row := r.Pool.QueryRow(ctx, query, id)
-	
-	var repo model.Repository
-	err := row.Scan(
-		&repo.ID, 
-		&repo.GithubRepoID, 
-		&repo.InstallationID, 
-		&repo.Name, 
-		&repo.FullName, 
-		&repo.Private, 
-		&repo.CreatedAt,
-	)
-
+// ListRepositories gets all repos for a specific user
+func (r *RepoRepository) ListRepositories(ctx context.Context, userID int) ([]model.Repository, error) {
+	rows, err := r.Pool.Query(ctx, "SELECT id, user_id, name, owner, created_at FROM repositories WHERE user_id = $1", userID)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, nil // Not found
+		return nil, err
+	}
+	defer rows.Close()
+
+	var repos []model.Repository
+	for rows.Next() {
+		var repo model.Repository
+		if err := rows.Scan(&repo.ID, &repo.UserID, &repo.Name, &repo.Owner, &repo.CreatedAt); err != nil {
+			return nil, err
 		}
-		return nil, fmt.Errorf("failed to get repository: %w", err)
+		repos = append(repos, repo)
+	}
+	return repos, nil
+}
+
+// GetRepositoryByID fetches a single repo
+func (r *RepoRepository) GetRepositoryByID(ctx context.Context, id int) (*model.Repository, error) {
+	query := `SELECT id, user_id, name, owner, created_at FROM repositories WHERE id = $1`
+	row := r.Pool.QueryRow(ctx, query, id)
+
+	var repo model.Repository
+	err := row.Scan(&repo.ID, &repo.UserID, &repo.Name, &repo.Owner, &repo.CreatedAt)
+	if err != nil {
+		return nil, err
 	}
 	return &repo, nil
 }

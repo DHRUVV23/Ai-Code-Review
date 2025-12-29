@@ -7,51 +7,51 @@ import (
 	"os"
 	"time"
 
+	"github.com/DHRUVV23/ai-code-review/backend/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/go-github/v57/github"
-	"github.com/DHRUVV23/ai-code-review/backend/internal/repository"
+	"github.com/google/go-github/v50/github" // Ensure this matches your go.mod version
 	"golang.org/x/oauth2"
-	githuboauth "golang.org/x/oauth2/github" 
-	// "golang.org/x/oauth2/github"
+	githuboauth "golang.org/x/oauth2/github"
 )
 
 type AuthHandler struct {
 	UserRepo *repository.UserRepository
 }
 
-// oauthConf setup
-var oauthConf = &oauth2.Config{
-	ClientID:     "", // Set in Init() or use os.Getenv directly below
-	ClientSecret: "",
-	Scopes:       []string{"repo", "user:email"},
-	Endpoint:     githuboauth.Endpoint, 
-}
-
-func init() {
-	oauthConf.ClientID = os.Getenv("GITHUB_CLIENT_ID")
-	oauthConf.ClientSecret = os.Getenv("GITHUB_CLIENT_SECRET")
+// Helper to get config (Corrects the init() bug by loading when needed)
+func getOAuthConfig() *oauth2.Config {
+	return &oauth2.Config{
+		ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
+		ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
+		Scopes:       []string{"repo", "user:email"},
+		Endpoint:     githuboauth.Endpoint,
+		RedirectURL:  "http://localhost:8080/auth/github/callback",
+	}
 }
 
 // GitHubLogin redirects user to GitHub
 func (h *AuthHandler) GitHubLogin(c *gin.Context) {
-	url := oauthConf.AuthCodeURL("random_state_string", oauth2.AccessTypeOffline)
+	conf := getOAuthConfig()
+	// Redirect user to GitHub's consent page
+	url := conf.AuthCodeURL("random_state_string", oauth2.AccessTypeOffline)
 	c.Redirect(http.StatusTemporaryRedirect, url)
 }
 
 // GitHubCallback handles the return from GitHub
 func (h *AuthHandler) GitHubCallback(c *gin.Context) {
 	code := c.Query("code")
-	
+	conf := getOAuthConfig()
+
 	// 1. Exchange code for token
-	token, err := oauthConf.Exchange(context.Background(), code)
+	token, err := conf.Exchange(context.Background(), code)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to exchange token"})
 		return
 	}
 
 	// 2. Fetch User Info from GitHub
-	oauthClient := oauthConf.Client(context.Background(), token)
+	oauthClient := conf.Client(context.Background(), token)
 	client := github.NewClient(oauthClient)
 
 	githubUser, _, err := client.Users.Get(context.Background(), "")
@@ -60,20 +60,15 @@ func (h *AuthHandler) GitHubCallback(c *gin.Context) {
 		return
 	}
 
-	// 3. Extract Data (Safely handle pointers)
+	// 3. Extract Data
 	githubID := githubUser.GetID()
 	username := githubUser.GetLogin()
 	email := githubUser.GetEmail()
-
 	if email == "" {
-		// Fallback: If email is private, we might need to fetch it explicitly.
-		// For now, we'll create a dummy placeholder or error out.
-		// A robust app would make a second call to /user/emails here.
-		email = fmt.Sprintf("%s@no-email.github.com", username) 
+		email = fmt.Sprintf("%s@no-email.github.com", username)
 	}
 
-	// 4. Upsert User into Database
-	// FIX: We now pass 4 arguments: Context, GithubID, Username, Email
+	// 4. Upsert User into Database (Your smart logic)
 	userID, err := h.UserRepo.UpsertUser(c.Request.Context(), githubID, username, email)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save user"})
@@ -86,16 +81,20 @@ func (h *AuthHandler) GitHubCallback(c *gin.Context) {
 		"exp":     time.Now().Add(time.Hour * 24).Unix(),
 	})
 
-	tokenString, err := jwtToken.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	// Ensure JWT_SECRET is in your .env
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		secret = "default_secret_please_change" // Fallback to prevent crash
+	}
+	
+	tokenString, err := jwtToken.SignedString([]byte(secret))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 		return
 	}
 
-	// 6. Success! Return the token
-	c.JSON(http.StatusOK, gin.H{
-		"token":    tokenString,
-		"user_id":  userID,
-		"username": username,
-	})
+	// 6. REDIRECT to Frontend (The Critical Fix)
+	// Instead of showing JSON, we send the user back to the React App with the token
+	frontendURL := fmt.Sprintf("http://localhost:3000/dashboard?token=%s&user=%s", tokenString, username)
+	c.Redirect(http.StatusFound, frontendURL)
 }

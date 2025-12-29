@@ -34,16 +34,16 @@ func main() {
 	// 3. Initialize Repositories (The "Stock Clerks")
 	// These handle the raw SQL for each table
 	userRepo := repository.NewUserRepository(database.Pool)
-	repoRepo := repository.NewRepoRepository(database.Pool)     // <--- ADDED
-	configRepo := repository.NewConfigRepository(database.Pool) // <--- ADDED
+	repoRepo := repository.NewRepoRepository(database.Pool)     
+	configRepo := repository.NewConfigRepository(database.Pool) 
 	reviewRepo := repository.NewReviewRepository(database.Pool)
 
 	// 4. Initialize Handlers (The "Waiters")
 	// We inject the repositories into the handlers
 	authHandler := &handler.AuthHandler{UserRepo: userRepo}
 	repoHandler := &handler.RepoHandler{
-		RepoRepository:   repoRepo,   // <--- ADDED
-		ConfigRepository: configRepo, // <--- ADDED
+		RepoRepository:   repoRepo,   
+		ConfigRepository: configRepo, 
 	}
 	userHandler := &handler.UserHandler{UserRepo: userRepo}
 	reviewHandler := &handler.ReviewHandler{ReviewRepository: reviewRepo}
@@ -66,8 +66,8 @@ func main() {
 	// 6. Register Routes
 	// --- Webhooks ---
 	r.POST("/webhooks/github", handler.HandleWebhook)
-	r.GET("/auth/login", authHandler.GitHubLogin)
-	r.GET("/auth/callback", authHandler.GitHubCallback)
+	r.GET("/auth/github/login", authHandler.GitHubLogin)
+	r.GET("/auth/github/callback", authHandler.GitHubCallback)
 
 	// 2. Dashboard API (Week 3 Structure)
 	// We group them under "v1" so your URLs look like /api/v1/user/profile
@@ -78,10 +78,13 @@ func main() {
 		v1.PUT("/user/profile", userHandler.UpdateUserProfile)
 		
 		// Repository Routes (Refactoring old routes to match new plan)
-		v1.GET("/user/repositories", repoHandler.ListRepositories) // Matches "GET /api/v1/user/repositories"
-		v1.GET("/repositories/:id", repoHandler.GetConfig)         // Matches "GET /api/v1/repositories/:id" (We reused config for now)
+		v1.POST("/repositories", repoHandler.RegisterRepository)
+		v1.GET("/user/repositories", repoHandler.ListRepositories) 
+		v1.GET("/repositories/:id", repoHandler.GetConfig)        
 		v1.PUT("/repositories/:id/config", repoHandler.UpdateConfig)
 		v1.GET("/repositories/:id/reviews", reviewHandler.ListReviews) 
+		
+       
 	}
 
 	r.Run(":8080")
