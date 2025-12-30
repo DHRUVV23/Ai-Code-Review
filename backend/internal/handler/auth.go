@@ -24,7 +24,7 @@ func getOAuthConfig() *oauth2.Config {
 	return &oauth2.Config{
 		ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
 		ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
-		Scopes:       []string{"repo", "user:email"},
+		Scopes: []string{"user:email", "read:user", "repo", "admin:repo_hook"},
 		Endpoint:     githuboauth.Endpoint,
 		RedirectURL:  "http://localhost:8080/auth/github/callback",
 	}
@@ -69,11 +69,13 @@ func (h *AuthHandler) GitHubCallback(c *gin.Context) {
 	}
 
 	// 4. Upsert User into Database (Your smart logic)
-	userID, err := h.UserRepo.UpsertUser(c.Request.Context(), githubID, username, email)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save user"})
-		return
-	}
+	userID, err := h.UserRepo.UpsertUser(c.Request.Context(), githubID, username, email, token.AccessToken)
+    
+    if err != nil {
+        fmt.Println("❌ CRITICAL ERROR SAVING USER:", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save user"})
+        return
+    }
 
 	// 5. Generate JWT Token
 	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{

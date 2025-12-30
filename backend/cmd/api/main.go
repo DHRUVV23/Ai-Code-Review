@@ -44,6 +44,7 @@ func main() {
 	repoHandler := &handler.RepoHandler{
 		RepoRepository:   repoRepo,   
 		ConfigRepository: configRepo, 
+		UserRepository:   userRepo,
 	}
 	userHandler := &handler.UserHandler{UserRepo: userRepo}
 	reviewHandler := &handler.ReviewHandler{ReviewRepository: reviewRepo}
@@ -83,6 +84,7 @@ func main() {
 		v1.GET("/repositories/:id", repoHandler.GetConfig)        
 		v1.PUT("/repositories/:id/config", repoHandler.UpdateConfig)
 		v1.GET("/repositories/:id/reviews", reviewHandler.ListReviews) 
+		v1.POST("/repositories/:id/webhook", repoHandler.CreateWebhook)
 		
        
 	}
