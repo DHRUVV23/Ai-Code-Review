@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import RepoReviews from "./pages/RepoReviews";
+import RepoDetails from "./pages/RepoDetails";
 import './index.css';
 
 function App() {
@@ -11,7 +12,8 @@ function App() {
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/repo/:id" element={<RepoReviews />} />
+        {/* <Route path="/repo/:id" element={<RepoReviews />} /> */}
+        <Route path="/repo/:id" element={<RepoDetails />} />
       </Routes>
     </Router>
   );

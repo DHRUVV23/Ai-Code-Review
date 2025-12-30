@@ -1,17 +1,77 @@
-import React from "react";
-import { Link } from "react-router-dom";
-import { GitPullRequest, Search, Bell, Settings, LogOut } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
+import axios from "axios";
+import { GitPullRequest, Search, Bell, Plus, LogOut, X } from "lucide-react";
 
 const Dashboard = () => {
-  // Mock data for now
-  const repos = [
-    { id: 1, name: "DHRUVV23/OmniScribe", status: "Active", pendingReviews: 2 },
-    { id: 2, name: "DHRUVV23/ai-code-review", status: "Inactive", pendingReviews: 0 },
-  ];
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  
+  const [user, setUser] = useState(localStorage.getItem("user_name") || "Guest");
+  const [repos, setRepos] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newRepoOwner, setNewRepoOwner] = useState("");
+  const [newRepoName, setNewRepoName] = useState("");
+
+  useEffect(() => {
+    const tokenFromURL = searchParams.get("token");
+    const userFromURL = searchParams.get("user");
+    if (tokenFromURL) {
+      localStorage.setItem("auth_token", tokenFromURL);
+      localStorage.setItem("user_name", userFromURL);
+      setUser(userFromURL);
+      window.history.replaceState({}, document.title, "/dashboard");
+    }
+    fetchRepos();
+  }, [searchParams]);
+
+  const fetchRepos = async () => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+    try {
+      const response = await axios.get("http://localhost:8080/api/v1/user/repositories", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setRepos(response.data || []);
+    } catch (error) {
+      console.error("Failed to fetch repos", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddRepo = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem("auth_token");
+    
+    try {
+      await axios.post("http://localhost:8080/api/v1/repositories", 
+        { owner: newRepoOwner, name: newRepoName },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      // Reset & Refresh
+      setIsModalOpen(false);
+      setNewRepoName("");
+      setNewRepoOwner("");
+      fetchRepos(); // Refresh the list!
+      alert("Repository Added Successfully!");
+    } catch (err) {
+      alert("Failed to add repository: " + err.message);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.clear();
+    window.location.href = "/";
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Top Navigation */}
+    <div className="min-h-screen bg-gray-50 relative">
+      {/* Navbar & Header (Same as before) */}
       <nav className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <div className="bg-purple-600 p-2 rounded-lg">
@@ -20,70 +80,79 @@ const Dashboard = () => {
           <h1 className="text-xl font-bold text-gray-900">AI Code Reviewer</h1>
         </div>
         <div className="flex items-center gap-4">
-          <div className="relative hidden md:block">
-            <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input 
-              type="text" 
-              placeholder="Search repositories..." 
-              className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 w-64"
-            />
-          </div>
-          <button className="p-2 hover:bg-gray-100 rounded-full relative">
-            <Bell className="w-5 h-5 text-gray-600" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-          </button>
-          <div className="w-8 h-8 bg-gradient-to-tr from-purple-500 to-blue-500 rounded-full border-2 border-white shadow-sm"></div>
+           <span className="text-gray-700 font-medium">Hi, {user}</span>
+           <button onClick={handleLogout} className="p-2 hover:bg-gray-100 rounded-full"><LogOut className="w-5 h-5 text-gray-600" /></button>
         </div>
       </nav>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
         <div className="flex justify-between items-end mb-8">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Repositories</h2>
-            <p className="text-gray-500 mt-1">Manage your connected projects and reviews</p>
-          </div>
-          <button className="bg-gray-900 hover:bg-gray-800 text-white px-5 py-2.5 rounded-lg font-medium transition-colors shadow-sm flex items-center gap-2">
-            <Settings className="w-4 h-4" />
-            Configure New Repo
+          <h2 className="text-2xl font-bold text-gray-900">Repositories</h2>
+          <button 
+            onClick={() => setIsModalOpen(true)} // OPEN MODAL
+            className="bg-gray-900 hover:bg-gray-800 text-white px-5 py-2.5 rounded-lg font-medium flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" /> Add Repository
           </button>
         </div>
 
-        {/* Repository Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {repos.map((repo) => (
-            <Link 
-              key={repo.id} 
-              to={`/repo/${repo.id}`}
-              className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-purple-300 transition-all duration-300 group"
-            >
-              <div className="flex justify-between items-start mb-4">
-                <div className="bg-purple-50 p-3 rounded-lg group-hover:bg-purple-100 transition-colors">
-                  <GitPullRequest className="w-6 h-6 text-purple-600" />
-                </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                  repo.status === 'Active' 
-                    ? 'bg-green-100 text-green-700' 
-                    : 'bg-gray-100 text-gray-600'
-                }`}>
-                  {repo.status}
-                </span>
-              </div>
-              
-              <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-purple-600 transition-colors">
-                {repo.name}
-              </h3>
-              
-              <div className="flex items-center justify-between text-sm text-gray-500 mt-4 pt-4 border-t border-gray-100">
-                <span>Last checked: 2h ago</span>
-                <span className="flex items-center gap-1">
-                  {repo.pendingReviews} pending
-                </span>
-              </div>
-            </Link>
-          ))}
-        </div>
+        {loading ? <p>Loading...</p> : repos.length === 0 ? (
+          <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
+             <p className="text-gray-500">No repositories yet.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {repos.map((repo) => (
+              <Link key={repo.id} to={`/repo/${repo.id}`} className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all">
+                <h3 className="text-lg font-bold text-gray-900">{repo.owner} / {repo.name}</h3>
+                <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full mt-2 inline-block">Active</span>
+              </Link>
+            ))}
+          </div>
+        )}
       </main>
+
+      {/* --- ADD REPO MODAL --- */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold">Add New Repository</h3>
+              <button onClick={() => setIsModalOpen(false)}><X className="w-5 h-5 text-gray-500" /></button>
+            </div>
+            
+            <form onSubmit={handleAddRepo}>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Owner (Username)</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. DHRUVV23"
+                    className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500"
+                    value={newRepoOwner}
+                    onChange={(e) => setNewRepoOwner(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Repository Name</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. ai-code-review"
+                    className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500"
+                    value={newRepoName}
+                    onChange={(e) => setNewRepoName(e.target.value)}
+                    required
+                  />
+                </div>
+                <button type="submit" className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg transition-colors">
+                  Add Repository
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
