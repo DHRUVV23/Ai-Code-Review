@@ -2,32 +2,30 @@ package worker
 
 import (
 	"encoding/json"
-	// "fmt"
-
 	"github.com/hibiken/asynq"
 )
 
-// 1. Name the Job Type (Like a Subject Line)
+// Task Name
 const TypeReviewPR = "review:pr"
 
-// 2. Define the Data Payload (What's inside the envelope)
-type ReviewPRPayload struct {
-	RepoID   int    `json:"repo_id"`
-	PrNumber int    `json:"pr_number"`
-	RepoName string `json:"repo_name"` // e.g., "owner/repo"
+// Payload
+type ReviewPayload struct {
+	RepoName  string `json:"repo_name"`
+	RepoOwner string `json:"repo_owner"`
+	PRNumber  int    `json:"pr_number"`
+	RepoID    int64  `json:"repo_id"`
 }
 
-// 3. Create the Task Helper Function
-func NewReviewPRTask(repoID int, prNumber int, repoName string) (*asynq.Task, error) {
-	payload, err := json.Marshal(ReviewPRPayload{
-		RepoID:   repoID,
-		PrNumber: prNumber,
-		RepoName: repoName,
+// NewReviewTask creates the task (Use this name!)
+func NewReviewTask(repoName, repoOwner string, prNumber int, repoID int64) (*asynq.Task, error) {
+	payload, err := json.Marshal(ReviewPayload{
+		RepoName:  repoName,
+		RepoOwner: repoOwner,
+		PRNumber:  prNumber,
+		RepoID:    repoID,
 	})
 	if err != nil {
 		return nil, err
 	}
-	
-	// Create the task with the payload
 	return asynq.NewTask(TypeReviewPR, payload), nil
 }

@@ -2,101 +2,130 @@ package handler
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"net/http"
-	"os"
-	"time"
+	"fmt"
 
+	// Using your preferred import structure
+	"github.com/DHRUVV23/ai-code-review/backend/internal/config"
 	"github.com/DHRUVV23/ai-code-review/backend/internal/repository"
+	
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/go-github/v50/github" // Ensure this matches your go.mod version
 	"golang.org/x/oauth2"
-	githuboauth "golang.org/x/oauth2/github"
+	"golang.org/x/oauth2/github"
 )
 
 type AuthHandler struct {
 	UserRepo *repository.UserRepository
+	Config   *config.Config // <--- Added this missing field
 }
 
-// Helper to get config (Corrects the init() bug by loading when needed)
-func getOAuthConfig() *oauth2.Config {
-	return &oauth2.Config{
-		ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
-		ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
-		Scopes: []string{"user:email", "read:user", "repo", "admin:repo_hook"},
-		Endpoint:     githuboauth.Endpoint,
-		RedirectURL:  "http://localhost:8080/auth/github/callback",
-	}
-}
-
-// GitHubLogin redirects user to GitHub
+// GitHubLogin redirects the user to GitHub
 func (h *AuthHandler) GitHubLogin(c *gin.Context) {
-	conf := getOAuthConfig()
-	// Redirect user to GitHub's consent page
-	url := conf.AuthCodeURL("random_state_string", oauth2.AccessTypeOffline)
+	// Force the consent screen to ensure we get permissions
+	conf := &oauth2.Config{
+		ClientID:     h.Config.GithubClientID,
+		ClientSecret: h.Config.GithubClientSecret,
+		RedirectURL:  "http://localhost:8080/auth/github/callback",
+		Endpoint:     github.Endpoint,
+		Scopes:       []string{"user:email", "read:user", "repo", "admin:repo_hook"},
+	}
+	// AccessTypeOffline asks for a refresh token (optional), ApprovalForce forces the screen
+	url := conf.AuthCodeURL("state", oauth2.AccessTypeOffline, oauth2.ApprovalForce)
 	c.Redirect(http.StatusTemporaryRedirect, url)
 }
 
-// GitHubCallback handles the return from GitHub
+// GitHubCallback handles the code -> token exchange
 func (h *AuthHandler) GitHubCallback(c *gin.Context) {
 	code := c.Query("code")
-	conf := getOAuthConfig()
 
-	// 1. Exchange code for token
+	conf := &oauth2.Config{
+		ClientID:     h.Config.GithubClientID,
+		ClientSecret: h.Config.GithubClientSecret,
+		RedirectURL:  "http://localhost:8080/auth/github/callback",
+		Endpoint:     github.Endpoint,
+	}
+
 	token, err := conf.Exchange(context.Background(), code)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to exchange token"})
 		return
 	}
 
-	// 2. Fetch User Info from GitHub
-	oauthClient := conf.Client(context.Background(), token)
-	client := github.NewClient(oauthClient)
-
-	githubUser, _, err := client.Users.Get(context.Background(), "")
+	client := conf.Client(context.Background(), token)
+	resp, err := client.Get("https://api.github.com/user")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user info"})
 		return
 	}
+	defer resp.Body.Close()
 
-	// 3. Extract Data
-	githubID := githubUser.GetID()
-	username := githubUser.GetLogin()
-	email := githubUser.GetEmail()
-	if email == "" {
-		email = fmt.Sprintf("%s@no-email.github.com", username)
+	var githubUser struct {
+		ID       int64  `json:"id"`
+		Login    string `json:"login"`
+		Email    string `json:"email"`
+		Name     string `json:"name"`
 	}
-
-	// 4. Upsert User into Database (Your smart logic)
-	userID, err := h.UserRepo.UpsertUser(c.Request.Context(), githubID, username, email, token.AccessToken)
-    
-    if err != nil {
-        fmt.Println("❌ CRITICAL ERROR SAVING USER:", err)
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save user"})
-        return
-    }
-
-	// 5. Generate JWT Token
-	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": userID,
-		"exp":     time.Now().Add(time.Hour * 24).Unix(),
-	})
-
-	// Ensure JWT_SECRET is in your .env
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		secret = "default_secret_please_change" // Fallback to prevent crash
-	}
-	
-	tokenString, err := jwtToken.SignedString([]byte(secret))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+	if err := json.NewDecoder(resp.Body).Decode(&githubUser); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse user info"})
 		return
 	}
 
-	// 6. REDIRECT to Frontend (The Critical Fix)
-	// Instead of showing JSON, we send the user back to the React App with the token
-	frontendURL := fmt.Sprintf("http://localhost:3000/dashboard?token=%s&user=%s", tokenString, username)
-	c.Redirect(http.StatusFound, frontendURL)
+	// Save User + Token to DB
+	// Note: UpsertUser now takes 4 args: context, githubID, username, email, token
+	userID, err := h.UserRepo.UpsertUser(c.Request.Context(), githubUser.ID, githubUser.Login, githubUser.Email, token.AccessToken)
+	if err != nil {
+		fmt.Println("❌ DATABASE ERROR:", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save user"})
+		return
+	}
+
+	// Generate JWT
+	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user_id": userID,
+		"exp":     token.Expiry.Unix(),
+	})
+	tokenString, _ := jwtToken.SignedString([]byte("your_jwt_secret")) 
+
+	// Redirect to Frontend with Token
+	c.Redirect(http.StatusTemporaryRedirect, "http://localhost:3000/dashboard?token="+tokenString)
+}
+
+// GetUserProfile - Handles GET /api/v1/user/profile
+func (h *AuthHandler) GetUserProfile(c *gin.Context) {
+	userID := getUserIDFromToken(c)
+	if userID == 0 {
+		return
+	}
+
+	user, err := h.UserRepo.GetUserByID(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, user)
+}
+
+// UpdateUserProfile - Handles PUT /api/v1/user/profile
+func (h *AuthHandler) UpdateUserProfile(c *gin.Context) {
+	// Just a placeholder for now to satisfy the interface
+	c.JSON(http.StatusOK, gin.H{"message": "Profile updated"})
+}
+
+// Helper function
+func getUserIDFromToken(c *gin.Context) int {
+	tokenString := c.GetHeader("Authorization")
+	if len(tokenString) > 7 {
+		tokenString = tokenString[7:]
+	}
+	token, _, _ := new(jwt.Parser).ParseUnverified(tokenString, jwt.MapClaims{})
+	if claims, ok := token.Claims.(jwt.MapClaims); ok {
+		if idFloat, ok := claims["user_id"].(float64); ok {
+			return int(idFloat)
+		}
+	}
+	c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+	return 0
 }

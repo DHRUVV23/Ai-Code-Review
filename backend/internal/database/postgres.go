@@ -40,17 +40,17 @@ func InitDB() error {
 
 	// A. Users
 	if _, err := Pool.Exec(context.Background(), `
-		CREATE TABLE IF NOT EXISTS users (
-			id SERIAL PRIMARY KEY,
-			github_id BIGINT UNIQUE,
-			username TEXT,
-			email TEXT UNIQUE NOT NULL,
-			created_at TIMESTAMP DEFAULT NOW(),
-			updated_at TIMESTAMP DEFAULT NOW()
-		);`); err != nil {
-		return err
-	}
-
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            github_id BIGINT UNIQUE,
+            username TEXT,
+            email TEXT UNIQUE NOT NULL,
+            access_token TEXT,  -- 👈 ADD THIS LINE!
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        );`); err != nil {
+        return err
+    }
 	// B. Repositories
 	if _, err := Pool.Exec(context.Background(), `
 		CREATE TABLE IF NOT EXISTS repositories (

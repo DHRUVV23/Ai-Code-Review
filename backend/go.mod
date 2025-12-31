@@ -8,7 +8,6 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/generative-ai-go v0.20.1
 	github.com/google/go-github/v50 v50.2.0
-	github.com/google/go-github/v57 v57.0.0
 	github.com/hibiken/asynq v0.25.1
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/joho/godotenv v1.5.1

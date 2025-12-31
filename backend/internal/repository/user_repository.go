@@ -21,18 +21,17 @@ func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
 // Added 'accessToken' parameter
 func (r *UserRepository) UpsertUser(ctx context.Context, githubID int64, username string, email string, accessToken string) (int, error) {
 	var id int
-	// We now insert access_token and update it on conflict
+	// FIX: Changed ON CONFLICT to check (github_id) instead of (email)
 	query := `
 		INSERT INTO users (github_id, username, email, access_token, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, NOW(), NOW())
-		ON CONFLICT (email) DO UPDATE 
-		SET github_id = EXCLUDED.github_id,
-			username = EXCLUDED.username, 
-			access_token = EXCLUDED.access_token, -- Update token if it changed
+		ON CONFLICT (github_id) DO UPDATE 
+		SET username = EXCLUDED.username, 
+			email = EXCLUDED.email,
+			access_token = EXCLUDED.access_token,
 			updated_at = NOW()
 		RETURNING id`
 
-	// Pass accessToken to the query
 	err := r.Pool.QueryRow(ctx, query, githubID, username, email, accessToken).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("upsert user failed: %w", err)
@@ -40,9 +39,9 @@ func (r *UserRepository) UpsertUser(ctx context.Context, githubID int64, usernam
 	return id, nil
 }
 
-// GetUserByID fetches a user including their Access Token
+// GetUserByID fetches a user from the 'users' table
 func (r *UserRepository) GetUserByID(ctx context.Context, id int) (*model.User, error) {
-	// Added access_token to the SELECT list
+	// FIX: Targeting 'users' table
 	query := `SELECT id, github_id, username, email, access_token, created_at, updated_at FROM users WHERE id = $1`
 
 	var user model.User
@@ -51,7 +50,7 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int) (*model.User, 
 		&user.GithubID, 
 		&user.Username, 
 		&user.Email, 
-		&user.AccessToken, // Scan the new field
+		&user.AccessToken,
 		&user.CreatedAt, 
 		&user.UpdatedAt,
 	)
@@ -62,5 +61,7 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int) (*model.User, 
 		}
 		return nil, err
 	}
+
+	user.Name = user.Username
 	return &user, nil
 }
