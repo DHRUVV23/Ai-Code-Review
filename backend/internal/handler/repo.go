@@ -124,7 +124,7 @@ func (h *RepoHandler) CreateWebhook(c *gin.Context) {
 
 	// 6. Define the Webhook
 	// IMPORTANT: Update this URL to your real Ngrok or Domain URL
-	webhookURL := " https://verona-unabolished-ivy.ngrok-free.dev/webhook" 
+	webhookURL := "https://verona-unabolished-ivy.ngrok-free.dev/webhook" 
 	
 	webhookSecret := os.Getenv("GITHUB_WEBHOOK_SECRET")
 
