@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/DHRUVV23/ai-code-review/backend/internal/model"
 	"github.com/DHRUVV23/ai-code-review/backend/internal/repository"
@@ -124,7 +125,7 @@ func (h *RepoHandler) CreateWebhook(c *gin.Context) {
 
 	// 6. Define the Webhook
 	// IMPORTANT: Update this URL to your real Ngrok or Domain URL
-	webhookURL := "https://verona-unabolished-ivy.ngrok-free.dev/webhook" 
+	webhookURL := " https://verona-unabolished-ivy.ngrok-free.dev/webhook" 
 	
 	webhookSecret := os.Getenv("GITHUB_WEBHOOK_SECRET")
 
@@ -157,4 +158,55 @@ func (h *RepoHandler) CreateWebhook(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Webhook created successfully!"})
+}
+// DeleteRepository handles DELETE /api/v1/repositories/:id
+func (h *RepoHandler) DeleteRepository(c *gin.Context) {
+	// 1. Get User ID & Repo ID
+	userID := getUserIDFromToken(c)
+	if userID == 0 { return }
+	repoID, _ := strconv.Atoi(c.Param("id"))
+
+	// 2. Fetch Repo Details (To get Owner & Name for GitHub)
+	repo, err := h.RepoRepository.GetRepositoryByID(c.Request.Context(), repoID)
+	if err != nil || repo == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Repository not found"})
+		return
+	}
+
+	// 3. Prepare GitHub Client
+	user, err := h.UserRepository.GetUserByID(c.Request.Context(), userID)
+	if err != nil || user.AccessToken == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "GitHub token invalid"})
+		return
+	}
+	
+	ctx := c.Request.Context()
+	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: user.AccessToken})
+	client := github.NewClient(oauth2.NewClient(ctx, ts))
+
+	// 4. Find and Delete the Webhook on GitHub
+	// We list all hooks to find the one matching our URL
+	hooks, _, err := client.Repositories.ListHooks(ctx, repo.Owner, repo.Name, nil)
+	if err == nil {
+		targetURL := "ngrok-free.app" // Part of your URL to identify your hook
+		for _, hook := range hooks {
+			config := hook.Config
+			if url, ok := config["url"].(string); ok && strings.Contains(url, targetURL) {
+				// Found it! Delete it.
+				client.Repositories.DeleteHook(ctx, repo.Owner, repo.Name, hook.GetID())
+				log.Printf("🗑️ Deleted GitHub Webhook ID: %d", hook.GetID())
+				break
+			}
+		}
+	} else {
+		log.Printf("⚠️ Could not list GitHub hooks (might already be deleted): %v", err)
+	}
+
+	// 5. Delete from Database
+	if err := h.RepoRepository.DeleteRepository(ctx, repoID, userID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete repository"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Repository deleted and unlinked successfully"})
 }

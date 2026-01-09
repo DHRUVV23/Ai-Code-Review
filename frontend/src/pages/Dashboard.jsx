@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { GitPullRequest, Search, Bell, Plus, LogOut, X } from "lucide-react";
+// 👇 ADDED Trash2 to imports
+import { GitPullRequest, Search, Bell, Plus, LogOut, X, Trash2 } from "lucide-react";
 
 const Dashboard = () => {
   const [searchParams] = useSearchParams();
@@ -53,14 +54,34 @@ const Dashboard = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
-      // Reset & Refresh
       setIsModalOpen(false);
       setNewRepoName("");
       setNewRepoOwner("");
-      fetchRepos(); // Refresh the list!
+      fetchRepos(); 
       alert("Repository Added Successfully!");
     } catch (err) {
       alert("Failed to add repository: " + err.message);
+    }
+  };
+
+  // 👇 NEW DELETE FUNCTION
+  const handleDelete = async (repoId) => {
+    if (!confirm("Are you sure? This will delete the webhook and unlink the repo.")) {
+      return;
+    }
+
+    const token = localStorage.getItem("auth_token");
+    try {
+      await axios.delete(`http://localhost:8080/api/v1/repositories/${repoId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Update UI immediately
+      setRepos(repos.filter((r) => r.id !== repoId));
+      alert("Repository deleted successfully!");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete repository.");
     }
   };
 
@@ -71,7 +92,6 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 relative">
-      {/* Navbar & Header (Same as before) */}
       <nav className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <div className="bg-purple-600 p-2 rounded-lg">
@@ -80,7 +100,7 @@ const Dashboard = () => {
           <h1 className="text-xl font-bold text-gray-900">AI Code Reviewer</h1>
         </div>
         <div className="flex items-center gap-4">
-           <span className="text-gray-700 font-medium">Hi DHRUVV23</span>
+           <span className="text-gray-700 font-medium">Hi {user}</span>
            <button onClick={handleLogout} className="p-2 hover:bg-gray-100 rounded-full"><LogOut className="w-5 h-5 text-gray-600" /></button>
         </div>
       </nav>
@@ -89,7 +109,7 @@ const Dashboard = () => {
         <div className="flex justify-between items-end mb-8">
           <h2 className="text-2xl font-bold text-gray-900">Repositories</h2>
           <button 
-            onClick={() => setIsModalOpen(true)} // OPEN MODAL
+            onClick={() => setIsModalOpen(true)}
             className="bg-gray-900 hover:bg-gray-800 text-white px-5 py-2.5 rounded-lg font-medium flex items-center gap-2"
           >
             <Plus className="w-4 h-4" /> Add Repository
@@ -103,10 +123,24 @@ const Dashboard = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {repos.map((repo) => (
-              <Link key={repo.id} to={`/repo/${repo.id}`} className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all">
-                <h3 className="text-lg font-bold text-gray-900">{repo.owner} / {repo.name}</h3>
-                <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full mt-2 inline-block">Active</span>
-              </Link>
+              // 👇 UPDATED CARD DESIGN (Div wrapper instead of Link wrapper)
+              <div key={repo.id} className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all relative group">
+                <Link to={`/repo/${repo.id}`} className="block">
+                    <h3 className="text-lg font-bold text-gray-900 hover:text-purple-600 transition-colors">
+                        {repo.owner} / {repo.name}
+                    </h3>
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full mt-2 inline-block">Active</span>
+                </Link>
+
+                {/* 👇 DELETE BUTTON */}
+                <button
+                    onClick={() => handleDelete(repo.id)}
+                    className="absolute top-4 right-4 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors opacity-0 group-hover:opacity-100"
+                    title="Delete Repository"
+                >
+                    <Trash2 className="w-5 h-5" />
+                </button>
+              </div>
             ))}
           </div>
         )}

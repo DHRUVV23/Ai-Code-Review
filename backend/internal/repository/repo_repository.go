@@ -94,3 +94,40 @@ func (r *RepoRepository) GetRepositoryByID(ctx context.Context, id int) (*model.
 	}
 	return &repo, nil
 }
+
+
+// DeleteRepository removes a repo AND its linked configuration
+func (r *RepoRepository) DeleteRepository(ctx context.Context, repoID, userID int) error {
+	// 1. Start a Transaction (To ensure both delete, or neither deletes)
+	tx, err := r.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	// 2. Delete the Configuration First (The "Child" data)
+	// We don't check for errors here strictly because a config might not exist, which is fine.
+	_, err = tx.Exec(ctx, "DELETE FROM configurations WHERE repository_id = $1", repoID)
+	if err != nil {
+		return fmt.Errorf("failed to delete config: %w", err)
+	}
+
+	// 3. Delete the Repository (The "Parent" data)
+	// We strictly ensure the user_id matches so users can't delete each other's repos
+	tag, err := tx.Exec(ctx, "DELETE FROM repositories WHERE id = $1 AND user_id = $2", repoID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to delete repo: %w", err)
+	}
+
+	// 4. Verify something was actually deleted
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("repository not found or unauthorized")
+	}
+
+	// 5. Commit the Transaction
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
+	return nil
+}

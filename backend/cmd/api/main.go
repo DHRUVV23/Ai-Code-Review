@@ -89,6 +89,7 @@ func main() {
 		v1.PUT("/user/profile", authHandler.UpdateUserProfile)
 
 		v1.POST("/repositories", repoHandler.RegisterRepository)
+		v1.DELETE("/repositories/:id", repoHandler.DeleteRepository)
 		v1.GET("/user/repositories", repoHandler.ListRepositories)
 		v1.GET("/repositories/:id", repoHandler.GetConfig)
 		v1.PUT("/repositories/:id/config", repoHandler.UpdateConfig)
