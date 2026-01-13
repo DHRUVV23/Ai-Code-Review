@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import axios from "axios";
-// 👇 ADDED Trash2 to imports
 import { GitPullRequest, Search, Bell, Plus, LogOut, X, Trash2 } from "lucide-react";
 
 const Dashboard = () => {
@@ -12,7 +11,6 @@ const Dashboard = () => {
   const [repos, setRepos] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newRepoOwner, setNewRepoOwner] = useState("");
   const [newRepoName, setNewRepoName] = useState("");
@@ -64,7 +62,6 @@ const Dashboard = () => {
     }
   };
 
-  // 👇 NEW DELETE FUNCTION
   const handleDelete = async (repoId) => {
     if (!confirm("Are you sure? This will delete the webhook and unlink the repo.")) {
       return;
@@ -76,7 +73,6 @@ const Dashboard = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // Update UI immediately
       setRepos(repos.filter((r) => r.id !== repoId));
       alert("Repository deleted successfully!");
     } catch (err) {
@@ -123,7 +119,7 @@ const Dashboard = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {repos.map((repo) => (
-              // 👇 UPDATED CARD DESIGN (Div wrapper instead of Link wrapper)
+              
               <div key={repo.id} className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all relative group">
                 <Link to={`/repo/${repo.id}`} className="block">
                     <h3 className="text-lg font-bold text-gray-900 hover:text-purple-600 transition-colors">
@@ -132,7 +128,7 @@ const Dashboard = () => {
                     <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full mt-2 inline-block">Active</span>
                 </Link>
 
-                {/* 👇 DELETE BUTTON */}
+               
                 <button
                     onClick={() => handleDelete(repo.id)}
                     className="absolute top-4 right-4 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors opacity-0 group-hover:opacity-100"
@@ -146,7 +142,7 @@ const Dashboard = () => {
         )}
       </main>
 
-      {/* --- ADD REPO MODAL --- */}
+    
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl">

@@ -9,11 +9,10 @@ import (
 
 	"github.com/hibiken/asynq"
 	
-	// Import your services
 	"github.com/DHRUVV23/ai-code-review/backend/internal/service"
 )
 
-// ReviewIssue represents the JSON structure returned by Gemini
+
 type ReviewIssue struct {
 	File       string `json:"file"`
 	Line       int    `json:"line"`
@@ -23,9 +22,8 @@ type ReviewIssue struct {
 	Suggestion string `json:"suggestion"`
 }
 
-// HandleReviewTask is the logic that runs when a job is picked up
 func HandleReviewTask(ctx context.Context, t *asynq.Task) error {
-	// 1. Unmarshal the Payload (Defined in tasks.go)
+
 	var payload ReviewPayload
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
 		return fmt.Errorf("json.Unmarshal failed: %v: %w", err, asynq.SkipRetry)
@@ -33,45 +31,42 @@ func HandleReviewTask(ctx context.Context, t *asynq.Task) error {
 
 	log.Printf("🤖 Processing Review for: %s/%s PR #%d", payload.RepoOwner, payload.RepoName, payload.PRNumber)
 
-	// 2. Initialize Services
+
 	ghService := service.NewGitHubService()
 	aiService := service.NewAIService()
 
-	// 3. Get the Code Diff from GitHub
+
 	diff, err := ghService.GetPullRequestDiff(ctx, payload.RepoOwner, payload.RepoName, payload.PRNumber)
 	if err != nil {
-		log.Printf("❌ Failed to get diff: %v", err)
-		return err // Retry later
+		log.Printf(" Failed to get diff: %v", err)
+		return err 
 	}
 
 	if diff == "" {
-		log.Println("⚠️ Diff is empty, skipping review.")
+		log.Println(" Diff is empty, skipping review.")
 		return nil
 	}
 
-	// 4. Send to Gemini AI
+
 	reviewJSON, err := aiService.ReviewCode(ctx, diff, "concise")
 	if err != nil {
-		log.Printf("❌ AI Analysis failed: %v", err)
-		return err // Retry later
-	}
-
-	// 5. Format the JSON into a Pretty Markdown Table
-	formattedComment := formatReviewToMarkdown(reviewJSON)
-	
-	// 6. Post the Comment to GitHub
-	if err := ghService.PostComment(ctx, payload.RepoOwner, payload.RepoName, payload.PRNumber, formattedComment); err != nil {
-		log.Printf("❌ Failed to post comment: %v", err)
+		log.Printf(" AI Analysis failed: %v", err)
 		return err
 	}
 
-	log.Printf("✅ Review Posted for PR #%d!", payload.PRNumber)
+	formattedComment := formatReviewToMarkdown(reviewJSON)
+	
+	if err := ghService.PostComment(ctx, payload.RepoOwner, payload.RepoName, payload.PRNumber, formattedComment); err != nil {
+		log.Printf(" Failed to post comment: %v", err)
+		return err
+	}
+
+	log.Printf("Review Posted for PR #%d!", payload.PRNumber)
 	return nil
 }
 
-// Helper Function: Converts JSON string -> Markdown Table
+
 func formatReviewToMarkdown(rawJSON string) string {
-	// Clean up the string (Gemini sometimes wraps output in ```json ... ```)
 	cleanJSON := strings.TrimSpace(rawJSON)
 	cleanJSON = strings.TrimPrefix(cleanJSON, "```json")
 	cleanJSON = strings.TrimPrefix(cleanJSON, "```")
@@ -84,17 +79,16 @@ func formatReviewToMarkdown(rawJSON string) string {
 	}
 
 	if len(issues) == 0 {
-		return "## 🤖 AI Code Review\n\n🚀 **LGTM! (Looks Good To Me)**\n\nNo critical issues found. Great job!"
+		return "##  AI Code Review\n\n **LGTM! (Looks Good To Me)**\n\nNo critical issues found. Great job!"
 	}
 
-	// Build the Markdown Table
 	var sb strings.Builder
 	sb.WriteString("## 🤖 AI Code Review\n\n")
 	sb.WriteString("| 🟢 Severity | 📂 File | 📝 Line | ⚠️ Issue | 💡 Suggestion |\n")
 	sb.WriteString("| :--- | :--- | :--- | :--- | :--- |\n")
 
 	for _, issue := range issues {
-		// Add an emoji based on severity
+		
 		severityIcon := "⚪"
 		switch strings.ToLower(issue.Severity) {
 		case "high":
@@ -105,7 +99,7 @@ func formatReviewToMarkdown(rawJSON string) string {
 			severityIcon = "🟢"
 		}
 
-		// Format the row
+		
 		row := fmt.Sprintf("| %s **%s** | `%s` | %d | **%s**: %s | %s |\n",
 			severityIcon, issue.Severity, issue.File, issue.Line, issue.Type, issue.Message, issue.Suggestion)
 		sb.WriteString(row)
@@ -115,24 +109,23 @@ func formatReviewToMarkdown(rawJSON string) string {
 	return sb.String()
 }
 
-// StartWorker initializes the background processor
 func StartWorker(redisAddr string) {
 	srv := asynq.NewServer(
 		asynq.RedisClientOpt{Addr: redisAddr},
 		asynq.Config{
-			Concurrency: 10, // Process 10 reviews at once
+			Concurrency: 10, 
 		},
 	)
 
 	mux := asynq.NewServeMux()
-	// Map the "review:pr" string to our handler function
+	
 	mux.HandleFunc(TypeReviewPR, HandleReviewTask)
 
-	// Run in a Goroutine so it doesn't block the API Server
+	
 	go func() {
 		log.Println("👷 Worker Server Started...")
 		if err := srv.Run(mux); err != nil {
-			log.Fatalf("❌ Worker failed to start: %v", err)
+			log.Fatalf(" Worker failed to start: %v", err)
 		}
 	}()
 }
