@@ -17,7 +17,6 @@ func NewRepoRepository(pool *pgxpool.Pool) *RepoRepository {
 	return &RepoRepository{Pool: pool}
 }
 
-// CreateRepository saves a new repo AND creates a default config
 func (r *RepoRepository) CreateRepository(ctx context.Context, userID int, name, owner string) (*model.Repository, error) {
 	tx, err := r.Pool.Begin(ctx)
 	if err != nil {
@@ -96,7 +95,7 @@ func (r *RepoRepository) GetRepositoryByID(ctx context.Context, id int) (*model.
 }
 
 
-// DeleteRepository removes a repo AND its linked configuration
+
 func (r *RepoRepository) DeleteRepository(ctx context.Context, repoID, userID int) error {
 	// 1. Start a Transaction (To ensure both delete, or neither deletes)
 	tx, err := r.Pool.Begin(ctx)
@@ -106,14 +105,12 @@ func (r *RepoRepository) DeleteRepository(ctx context.Context, repoID, userID in
 	defer tx.Rollback(ctx)
 
 	// 2. Delete the Configuration First (The "Child" data)
-	// We don't check for errors here strictly because a config might not exist, which is fine.
 	_, err = tx.Exec(ctx, "DELETE FROM configurations WHERE repository_id = $1", repoID)
 	if err != nil {
 		return fmt.Errorf("failed to delete config: %w", err)
 	}
 
 	// 3. Delete the Repository (The "Parent" data)
-	// We strictly ensure the user_id matches so users can't delete each other's repos
 	tag, err := tx.Exec(ctx, "DELETE FROM repositories WHERE id = $1 AND user_id = $2", repoID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to delete repo: %w", err)

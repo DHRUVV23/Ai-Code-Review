@@ -41,7 +41,7 @@ func (r *UserRepository) UpsertUser(ctx context.Context, githubID int64, usernam
 
 // GetUserByID fetches a user from the 'users' table
 func (r *UserRepository) GetUserByID(ctx context.Context, id int) (*model.User, error) {
-	// FIX: Targeting 'users' table
+
 	query := `SELECT id, github_id, username, email, access_token, created_at, updated_at FROM users WHERE id = $1`
 
 	var user model.User
