@@ -6,7 +6,6 @@ const ReviewList = ({ repoId }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Note: Assuming repoId 1 for now if not passed
     const id = repoId || 1; 
     axios
       .get(`http://localhost:8080/api/v1/repositories/${id}/reviews`)

@@ -8,10 +8,10 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-white flex items-center justify-center p-4">
-      {/* Subtle background pattern */}
+
       <div className="absolute inset-0 bg-gradient-to-br from-purple-50 via-white to-blue-50"></div>
       
-      {/* Main content */}
+   
       <div className="relative z-10 max-w-md w-full">
         {/* Logo/Icon section */}
         <div className="text-center mb-10">

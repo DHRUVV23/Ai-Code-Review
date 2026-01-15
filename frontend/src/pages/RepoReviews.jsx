@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import ReviewList from "../components/ReviewList";
 
 const RepoReviews = () => {
-  const { id } = useParams(); // Get ID from URL (e.g., /repo/1)
+  const { id } = useParams(); 
 
   return (
     <div>

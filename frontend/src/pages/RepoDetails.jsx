@@ -9,7 +9,6 @@ const RepoDetails = () => {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   
-  // New State for the button
   const [connecting, setConnecting] = useState(false);
   const [connected, setConnected] = useState(false);
 
@@ -38,13 +37,13 @@ const RepoDetails = () => {
     }
   };
 
-  // --- THE NEW FUNCTION ---
+
   const handleConnect = async () => {
     setConnecting(true);
     const token = localStorage.getItem("auth_token");
     
     try {
-      // Call the endpoint we just built
+      
       await axios.post(`http://localhost:8080/api/v1/repositories/${id}/webhook`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -55,7 +54,7 @@ const RepoDetails = () => {
       const msg = error.response?.data?.error || "Failed to connect";
       alert("Error: " + msg);
       
-      // Handle the specific "Token Missing" error
+     
       if (msg.includes("token not found")) {
          alert("Please Log Out and Log In again to save your GitHub permissions.");
       }
