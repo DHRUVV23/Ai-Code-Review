@@ -96,7 +96,7 @@ const Dashboard = () => {
           <h1 className="text-xl font-bold text-gray-900">AI Code Reviewer</h1>
         </div>
         <div className="flex items-center gap-4">
-           <span className="text-gray-700 font-medium">Hi {user}</span>
+           <span className="text-gray-700 font-medium">Hi , Dhruv</span>
            <button onClick={handleLogout} className="p-2 hover:bg-gray-100 rounded-full"><LogOut className="w-5 h-5 text-gray-600" /></button>
         </div>
       </nav>
