@@ -17,11 +17,9 @@ func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
 	return &UserRepository{Pool: pool}
 }
 
-// UpsertUser saves a user AND their Access Token
-// Added 'accessToken' parameter
 func (r *UserRepository) UpsertUser(ctx context.Context, githubID int64, username string, email string, accessToken string) (int, error) {
 	var id int
-	// FIX: Changed ON CONFLICT to check (github_id) instead of (email)
+
 	query := `
 		INSERT INTO users (github_id, username, email, access_token, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, NOW(), NOW())

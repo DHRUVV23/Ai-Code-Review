@@ -9,10 +9,10 @@ import (
 
 // FileChange represents a single file modified in a PR
 type FileChange struct {
-	Path     string // e.g., "backend/main.go"
-	Language string // e.g., "go", "python"
-	Content  string // The actual code changes (diff patch)
-	IsSafe   bool   // false if it's a lockfile, image, etc.
+	Path     string 
+	Language string 
+	Content  string 
+	IsSafe   bool  
 }
 
 const MaxFileSize = 20000
@@ -39,22 +39,20 @@ func (p *DiffParser) Parse(rawDiff string) []FileChange {
 			continue
 		}
 
-		// 1. Filter Junk
+		//  Filter Junk
 		if isIgnoredFile(path) {
 			continue
 		}
 
-		// 2. Detect Language
+		//  Detect Language
 		lang := detectLanguage(path)
 
-		// 3. HANDLE LARGE FILES (Roadmap Checkbox ✅)
+		//  HANDLE LARGE FILES
 		content := "diff --git " + rawFile
 		if len(content) > MaxFileSize {
-			// Option A: Truncate it (Keep top 20KB, discard rest)
+		
 			content = content[:MaxFileSize] + "\n... [TRUNCATED DUE TO SIZE] ..."
 			
-			// Option B: Skip it entirely (Uncomment below if you prefer skipping)
-			// continue 
 		}
 
 		files = append(files, FileChange{
@@ -71,10 +69,10 @@ func (p *DiffParser) Parse(rawDiff string) []FileChange {
 func extractFilePath(rawChunk string) string {
 	lines := strings.Split(rawChunk, "\n")
 	if len(lines) > 0 {
-		// Line 0 looks like: "a/filename.ext b/filename.ext"
+		
 		parts := strings.Fields(lines[0])
 		if len(parts) >= 2 {
-			// Return the second part (b/filename.ext), removing "b/" prefix
+		
 			return strings.TrimPrefix(parts[1], "b/")
 		}
 	}
@@ -105,10 +103,10 @@ func detectLanguage(path string) string {
 // isIgnoredFile returns true if we should skip sending this to AI
 func isIgnoredFile(path string) bool {
 	ignored := []string{
-		"package-lock.json", "yarn.lock", "go.sum", // Lockfiles
-		".png", ".jpg", ".svg", ".ico",             // Images
-		".gitignore", ".env",                       // Configs
-		"dist/", "build/", "node_modules/",         // Generated folders
+		"package-lock.json", "yarn.lock", "go.sum", 
+		".png", ".jpg", ".svg", ".ico",            
+		".gitignore", ".env",                       
+		"dist/", "build/", "node_modules/",         
 	}
 
 	for _, ignore := range ignored {

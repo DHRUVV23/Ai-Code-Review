@@ -20,8 +20,7 @@ func NewAIService() *AIService {
 	// Create the client with the API Key
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
-		// If client fails, we log it but don't crash yet (will fail on usage)
-		fmt.Printf("❌ Failed to create AI Client: %v\n", err)
+		fmt.Printf("Failed to create AI Client: %v\n", err)
 		return &AIService{Client: nil}
 	}
 
@@ -31,16 +30,14 @@ func NewAIService() *AIService {
 // ReviewCode sends the diff to Gemini and gets feedback
 func (s *AIService) ReviewCode(ctx context.Context, diff string, style string) (string, error) {
 	if s.Client == nil {
-		return "❌ AI Client not initialized. Check GEMINI_API_KEY.", nil
+		return "AI Client not initialized. Check GEMINI_API_KEY.", nil
 	}
 	defer s.Client.Close()
 
-	// 1. Select the Model (Gemini 1.5 Flash is fast & free)
 	model := s.Client.GenerativeModel("gemini-flash-latest")
 	model.ResponseMIMEType = "application/json"
 
-	// 3. PROMPT TEMPLATE
-	// FIX: Removed internal backticks to prevent syntax error
+	//  PROMPT TEMPLATE
 	prompt := fmt.Sprintf(`
 	You are a Senior Code Reviewer. 
 	Analyze the following Git Diff code changes.
@@ -68,13 +65,13 @@ func (s *AIService) ReviewCode(ctx context.Context, diff string, style string) (
 	%s
 	`, diff)
 
-	// 4. Send Request
+	//  Send Request
 	resp, err := model.GenerateContent(ctx, genai.Text(prompt))
 	if err != nil {
 		return "", err
 	}
 
-	// 5. Extract Response
+	//  Extract Response
 	if len(resp.Candidates) > 0 && len(resp.Candidates[0].Content.Parts) > 0 {
 		part := resp.Candidates[0].Content.Parts[0]
 		if txt, ok := part.(genai.Text); ok {
@@ -82,5 +79,5 @@ func (s *AIService) ReviewCode(ctx context.Context, diff string, style string) (
 		}
 	}
 
-	return "[]", nil // Fallback
+	return "[]", nil 
 }

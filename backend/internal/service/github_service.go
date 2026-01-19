@@ -10,13 +10,13 @@ import (
 )
 
 type GitHubService struct {
-	Client *github.Client // Exported field (Capital 'C')
+	Client *github.Client
 }
 
 func NewGitHubService() *GitHubService {
 	token := os.Getenv("GITHUB_TOKEN")
 	if token == "" {
-		// Return client without auth if token is missing (for public repos)
+		// Return client without auth if token is missing 
 		return &GitHubService{Client: github.NewClient(nil)}
 	}
 
@@ -41,12 +41,12 @@ func (s *GitHubService) GetPullRequestDiff(ctx context.Context, owner, repo stri
 
 // PostComment posts a markdown comment to the PR
 func (s *GitHubService) PostComment(ctx context.Context, owner, repo string, prNumber int, commentBody string) error {
-	// Create the comment object
+	
 	comment := &github.IssueComment{
 		Body: &commentBody,
 	}
 
-	// Use the library's built-in method (Fixes the "undefined" errors!)
+	// Use the library's built-in method 
 	_, _, err := s.Client.Issues.CreateComment(ctx, owner, repo, prNumber, comment)
 	if err != nil {
 		return fmt.Errorf("failed to post comment: %w", err)
