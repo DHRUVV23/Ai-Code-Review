@@ -23,23 +23,32 @@ type ReviewIssue struct {
 }
 
 func HandleReviewTask(ctx context.Context, t *asynq.Task) error {
-
 	var payload ReviewPayload
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
 		return fmt.Errorf("json.Unmarshal failed: %v: %w", err, asynq.SkipRetry)
 	}
 
-	log.Printf("🤖 Processing Review for: %s/%s PR #%d", payload.RepoOwner, payload.RepoName, payload.PRNumber)
+	log.Printf("Processing Review for: %s/%s PR #%d", payload.RepoOwner, payload.RepoName, payload.PRNumber)
 
+	ghService := service.NewGitHubService() 
+	
+	alreadyCommented, err := ghService.HasBotCommented(ctx, payload.RepoOwner, payload.RepoName, payload.PRNumber)
+	if err != nil {
+		log.Printf("Failed to check existing comments: %v", err)
+		// We continue anyway to be safe, or you could return err to retry
+	}
+	
+	if alreadyCommented {
+		log.Printf(" Skipping: Bot already reviewed PR #%d", payload.PRNumber)
+		return nil 
+	}
 
-	ghService := service.NewGitHubService()
 	aiService := service.NewAIService()
-
 
 	diff, err := ghService.GetPullRequestDiff(ctx, payload.RepoOwner, payload.RepoName, payload.PRNumber)
 	if err != nil {
 		log.Printf(" Failed to get diff: %v", err)
-		return err 
+		return err
 	}
 
 	if diff == "" {
@@ -47,16 +56,23 @@ func HandleReviewTask(ctx context.Context, t *asynq.Task) error {
 		return nil
 	}
 
-
 	reviewJSON, err := aiService.ReviewCode(ctx, diff, "concise")
 	if err != nil {
-		log.Printf(" AI Analysis failed: %v", err)
+		log.Printf("❌ AI Analysis failed: %v", err)
 		return err
 	}
 
-	formattedComment := formatReviewToMarkdown(reviewJSON)
+
+
+	commentBody := formatReviewToMarkdown(reviewJSON)
+
+	alreadyCommentedAgain, _ := ghService.HasBotCommented(ctx, payload.RepoOwner, payload.RepoName, payload.PRNumber)
+    if alreadyCommentedAgain {
+        log.Printf(" Race Condition Avoided: Comment already exists for PR #%d", payload.PRNumber)
+        return nil
+    }
 	
-	if err := ghService.PostComment(ctx, payload.RepoOwner, payload.RepoName, payload.PRNumber, formattedComment); err != nil {
+	if err := ghService.PostComment(ctx, payload.RepoOwner, payload.RepoName, payload.PRNumber, commentBody); err != nil {
 		log.Printf(" Failed to post comment: %v", err)
 		return err
 	}
@@ -64,7 +80,6 @@ func HandleReviewTask(ctx context.Context, t *asynq.Task) error {
 	log.Printf("Review Posted for PR #%d!", payload.PRNumber)
 	return nil
 }
-
 
 func formatReviewToMarkdown(rawJSON string) string {
 	cleanJSON := strings.TrimSpace(rawJSON)
@@ -74,7 +89,6 @@ func formatReviewToMarkdown(rawJSON string) string {
 
 	var issues []ReviewIssue
 	if err := json.Unmarshal([]byte(cleanJSON), &issues); err != nil {
-		// If parsing fails, fallback to displaying the raw text/JSON
 		return fmt.Sprintf("## 🤖 AI Review\n\n%s", rawJSON)
 	}
 

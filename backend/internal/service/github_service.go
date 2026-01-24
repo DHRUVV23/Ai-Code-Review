@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings" 
 
 	"github.com/google/go-github/v50/github"
 	"golang.org/x/oauth2"
@@ -16,7 +17,6 @@ type GitHubService struct {
 func NewGitHubService() *GitHubService {
 	token := os.Getenv("GITHUB_TOKEN")
 	if token == "" {
-		// Return client without auth if token is missing 
 		return &GitHubService{Client: github.NewClient(nil)}
 	}
 
@@ -29,7 +29,6 @@ func NewGitHubService() *GitHubService {
 	return &GitHubService{Client: github.NewClient(tc)}
 }
 
-// GetPullRequestDiff fetches the raw text of the changes
 func (s *GitHubService) GetPullRequestDiff(ctx context.Context, owner, repo string, prNumber int) (string, error) {
 	opts := github.RawOptions{Type: github.Diff}
 	diff, _, err := s.Client.PullRequests.GetRaw(ctx, owner, repo, prNumber, opts)
@@ -39,18 +38,29 @@ func (s *GitHubService) GetPullRequestDiff(ctx context.Context, owner, repo stri
 	return diff, nil
 }
 
-// PostComment posts a markdown comment to the PR
 func (s *GitHubService) PostComment(ctx context.Context, owner, repo string, prNumber int, commentBody string) error {
-	
 	comment := &github.IssueComment{
 		Body: &commentBody,
 	}
 
-	// Use the library's built-in method 
 	_, _, err := s.Client.Issues.CreateComment(ctx, owner, repo, prNumber, comment)
 	if err != nil {
 		return fmt.Errorf("failed to post comment: %w", err)
 	}
 
 	return nil
+}
+
+func (s *GitHubService) HasBotCommented(ctx context.Context, owner, repo string, prNumber int) (bool, error) {
+	comments, _, err := s.Client.Issues.ListComments(ctx, owner, repo, prNumber, nil)
+	if err != nil {
+		return false, err
+	}
+
+	for _, comment := range comments {
+		if comment.Body != nil && strings.Contains(*comment.Body, "## 🤖 AI Code Review") {
+			return true, nil
+		}
+	}
+	return false, nil
 }
